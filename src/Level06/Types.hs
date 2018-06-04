@@ -31,7 +31,7 @@ import           Data.Text                          (Text)
 
 import           System.IO.Error                    (IOError)
 
-import           Data.Monoid                        (Last,
+import           Data.Monoid                        (Last (..),
                                                      Monoid (mappend, mempty))
 import           Data.Semigroup                     (Semigroup ((<>)))
 
@@ -149,16 +149,23 @@ newtype Port = Port
   -- You will notice we're using ``Word16`` as our type for the ``Port`` value.
   -- This is because a valid port number can only be a 16bit unsigned integer.
   { getPort :: Word16 }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
+
+instance FromJSON Port
 
 newtype DBFilePath = DBFilePath
   { getDBFilePath :: FilePath }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
+
+instance FromJSON DBFilePath
 
 -- Add some fields to the ``Conf`` type:
 -- - A customisable port number: ``Port``
 -- - A filepath for our SQLite database: ``DBFilePath``
-data Conf = Conf
+data Conf = Conf {
+  getConfPort :: Word16,
+  getConfFilePath :: FilePath
+                 }
 
 -- We're storing our Port as a Word16 to be more precise and prevent invalid
 -- values from being used in our application. However Wai is not so stringent.
@@ -173,12 +180,12 @@ data Conf = Conf
 confPortToWai
   :: Conf
   -> Int
-confPortToWai =
-  error "confPortToWai not implemented"
+confPortToWai = fromIntegral . getConfPort
+
 
 -- Similar to when we were considering our application types, leave this empty
 -- for now and add to it as you go.
-data ConfigError = ConfigError
+data ConfigError = ConfigFileNotFound | ParseError String | ErrorMissingConfigFields
   deriving Show
 
 -- Our application will be able to load configuration from both a file and
@@ -210,13 +217,14 @@ data PartialConf = PartialConf
   , pcDBFilePath :: Last DBFilePath
   }
 
+
 -- Before we can define our ``Monoid`` instance for ``PartialConf``, we'll have
 -- to define a Semigroup instance. We define our ``(<>)`` function to lean
 -- on the ``Semigroup`` instance for Last to always get the last value.
 instance Semigroup PartialConf where
   _a <> _b = PartialConf
-    { pcPort       = error "pcPort (<>) not implemented"
-    , pcDBFilePath = error "pcDBFilePath (<>) not implemented"
+    { pcPort       = pcPort _a <> pcPort _b
+    , pcDBFilePath = pcDBFilePath _a <> pcDBFilePath _b
     }
 
 -- We now define our ``Monoid`` instance for ``PartialConf``. Allowing us to
@@ -236,4 +244,14 @@ instance Monoid PartialConf where
 -- have to tell aeson how to go about converting the JSON into our PartialConf
 -- data structure.
 instance FromJSON PartialConf where
-  parseJSON = error "parseJSON for PartialConf not implemented yet."
+  {-
+  parseJSON = A.withObject "PartialConf" $ \v -> (\a b -> PartialConf (Last a) (Last b))
+                                               <$> v A..:? "port"
+                                               <*> v A..:? "DBFilePath"
+-}
+  parseJSON = A.withObject "PartialConf" $ \o -> PartialConf
+    <$> parseToLast "port" Port o
+    <*> parseToLast "dbFilePath" DBFilePath o
+    where
+      parseToLast k c o =
+        Last . fmap c <$> o A..:? k

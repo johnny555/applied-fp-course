@@ -15,7 +15,7 @@ import           Data.Aeson                 (FromJSON, Object)
 
 import qualified Data.Aeson                 as Aeson
 
-import           Level06.Types              (ConfigError,
+import           Level06.Types              (ConfigError (..),
                                              PartialConf (PartialConf))
 -- Doctest setup section
 -- $setup
@@ -40,13 +40,15 @@ import           Level06.Types              (ConfigError,
 readConfFile
   :: FilePath
   -> IO ( Either ConfigError ByteString )
-readConfFile =
-  error "readConfFile not implemented"
+readConfFile fp =  do
+    res <- try (LBS.readFile fp)  :: IO (Either IOError ByteString)
+    pure $ first (const ConfigFileNotFound) res
 
 -- Construct the function that will take a ``FilePath``, read it in, decode it,
--- and construct our ``PartialConf``.
+  -- and construct our ``PartialConf``.
 parseJSONConfigFile
   :: FilePath
   -> IO ( Either ConfigError PartialConf )
-parseJSONConfigFile =
-  error "parseJSONConfigFile not implemented"
+parseJSONConfigFile fp = do
+  bs <- readConfFile fp
+  pure $ (first (\s -> ParseError s) . Aeson.eitherDecode) =<< bs

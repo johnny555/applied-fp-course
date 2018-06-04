@@ -45,7 +45,6 @@ import           Data.Bifunctor         (first)
 -- encountered, the structure of our AppM will automatically handle it for us.
 
 newtype AppM a = AppM (IO (Either Error a))
-
 runAppM
   :: AppM a
   -> IO (Either Error a)
@@ -54,32 +53,44 @@ runAppM (AppM m) =
 
 instance Functor AppM where
   fmap :: (a -> b) -> AppM a -> AppM b
-  fmap = error "fmap for AppM not implemented"
+  fmap f (AppM ma) = AppM $ ((<$>) f) <$> ma
 
 instance Applicative AppM where
   pure :: a -> AppM a
-  pure  = error "pure for AppM not implemented"
+  pure  = AppM . pure . pure
 
   (<*>) :: AppM (a -> b) -> AppM a -> AppM b
-  (<*>) = error "ap for AppM not implemented"
+  AppM mf <*> AppM ma = AppM $ ( (pure (<*>)) <*> mf ) <*> ma
 
 instance Monad AppM where
   return :: a -> AppM a
-  return = error "return for AppM not implemented"
+  return = pure
 
   (>>=) :: AppM a -> (a -> AppM b) -> AppM b
-  (>>=)  = error "bind for AppM not implemented"
+  --AppM aa >>= f = AppM $ aa >>= (\x -> pure ( x >>= (\y -> ( unsafePerformIO .runAppM ) (f y))))
+  AppM aa >>= f = AppM $ do
+    a <- aa
+    runAppM $ either throwError f a
+
 
 instance MonadIO AppM where
   liftIO :: IO a -> AppM a
-  liftIO = error "liftIO for AppM not implemented"
+  liftIO ioa = AppM $ do
+    a <- ioa
+    (pure . pure) a
+
+catchHelper :: (Error -> AppM a) -> Either Error a -> AppM a
+catchHelper cb (Left e)  = cb e
+catchHelper _ (Right a) = pure a
 
 instance MonadError Error AppM where
   throwError :: Error -> AppM a
-  throwError = error "throwError for AppM not implemented"
+  throwError er = (AppM . pure . Left) er
 
   catchError :: AppM a -> (Error -> AppM a) -> AppM a
-  catchError = error "catchError for AppM not implemented"
+  catchError (AppM a) cb = AppM $ a >>= runAppM . (catchHelper cb)
+
+
 
 -- This is a helper function that will `lift` an Either value into our new AppM
 -- by applying `throwError` to the Left value, and using `pure` to lift the
@@ -91,5 +102,5 @@ instance MonadError Error AppM where
 liftEither
   :: Either Error a
   -> AppM a
-liftEither =
-  error "throwLeft not implemented"
+liftEither (Left e) = throwError e
+liftEither (Right a) = pure a

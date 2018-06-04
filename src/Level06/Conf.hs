@@ -1,17 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-missing-methods #-}
 module Level06.Conf
-    ( parseOptions
+    ( parseOptions, defaultConf
     ) where
 
 import           GHC.Word                 (Word16)
 
-import           Data.Bifunctor           (first)
+import           Data.Bifunctor           (first, second)
 import           Data.Monoid              ((<>))
 
-import           Level06.Types            (Conf, ConfigError,
-                                           DBFilePath (DBFilePath), PartialConf,
-                                           Port (Port))
+import           Data.Monoid              (Last (..), getLast)
+import           Level06.Types            (Conf (..), ConfigError (..),
+                                           DBFilePath (DBFilePath), PartialConf (..),
+                                           Port (Port), getPort, getDBFilePath)
 
 import           Level06.Conf.CommandLine (commandLineParser)
 import           Level06.Conf.File        (parseJSONConfigFile)
@@ -21,8 +22,8 @@ import           Level06.Conf.File        (parseJSONConfigFile)
 -- configuration values from either the file or command line inputs.
 defaultConf
   :: PartialConf
-defaultConf =
-  error "defaultConf not implemented"
+defaultConf = PartialConf ( (Last . Just . Port) 3000) ((Last . Just . DBFilePath) "app_db.db")
+
 
 -- We need something that will take our PartialConf and see if can finally build
 -- a complete ``Conf`` record. Also we need to highlight any missing values by
@@ -30,8 +31,15 @@ defaultConf =
 makeConfig
   :: PartialConf
   -> Either ConfigError Conf
-makeConfig =
-  error "makeConfig not implemented"
+makeConfig (PartialConf port file) =
+  let
+    maybePort = getLast port
+    maybeFile = getLast file
+    maybeConfig = Conf  <$> (getPort <$> maybePort) <*> (getDBFilePath <$> maybeFile)
+  in
+    case maybeConfig of
+      Just conf -> Right conf
+      Nothing -> Left ErrorMissingConfigFields
 
 -- This is the function we'll actually export for building our configuration.
 -- Since it wraps all our efforts to read information from the command line, and
@@ -46,9 +54,13 @@ makeConfig =
 parseOptions
   :: FilePath
   -> IO (Either ConfigError Conf)
-parseOptions =
+parseOptions fp = do
+  defaults <- pure defaultConf
+  file <- parseJSONConfigFile fp
+  commandLine <- commandLineParser
+  res <- pure $ (\f c-> defaults <> f <> c) <$> file <*> pure commandLine
+  pure $ makeConfig =<< res
   -- Parse the options from the config file: "files/appconfig.json"
   -- Parse the options from the commandline using 'commandLineParser'
   -- Combine these with the default configuration 'defaultConf'
   -- Return the final configuration value
-  error "parseOptions not implemented"

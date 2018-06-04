@@ -12,6 +12,7 @@ module Level04.DB
 
 import           Data.Text                          (Text)
 import qualified Data.Text                          as Text
+import           Data.Bifunctor                     (first,second, bimap)
 
 import           Data.Time                          (getCurrentTime)
 
@@ -21,8 +22,12 @@ import qualified Database.SQLite.Simple             as Sql
 import qualified Database.SQLite.SimpleErrors       as Sql
 import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
+import           Database.SQLite.Simple.FromRow (FromRow (fromRow), field)
+
+
 import           Level04.Types                      (Comment, CommentText,
-                                                     Error, Topic)
+                                                     Error(..), Topic, fromDbComment,
+                                                     getTopic, getCommentText, mkTopic)
 
 -- ------------------------------------------------------------------------|
 -- You'll need the documentation for sqlite-simple ready for this section! |
@@ -43,8 +48,8 @@ data FirstAppDB = FirstAppDB
 closeDB
   :: FirstAppDB
   -> IO ()
-closeDB =
-  error "closeDb not implemented"
+closeDB = Sql.close . dbConn
+
 
 -- Given a `FilePath` to our SQLite DB file, initialise the database and ensure
 -- our Table is there by running a query to create it, if it doesn't exist
@@ -53,7 +58,11 @@ initDB
   :: FilePath
   -> IO ( Either SQLiteResponse FirstAppDB )
 initDB fp =
-  error "initDb not implemented"
+  Sql.runDBAction$
+  do
+    con <- Sql.open fp
+    Sql.execute_ con createTableQ
+    pure $ FirstAppDB con
   where
   -- Query has an `IsString` instance so string literals like this can be
   -- converted into a `Query` type when the `OverloadedStrings` language
@@ -70,46 +79,69 @@ initDB fp =
 --
 -- HINT: You can use '?' or named place-holders as query parameters. Have a look
 -- at the section on parameter substitution in sqlite-simple's documentation.
+parseSqlErrors :: SQLiteResponse -> Error
+parseSqlErrors _ = SqlDbError
+
 getComments
   :: FirstAppDB
   -> Topic
   -> IO (Either Error [Comment])
-getComments =
+getComments fadb topic =
   let
     sql = "SELECT id,topic,comment,time FROM comments WHERE topic = ?"
+
   -- There are several possible implementations of this function. Particularly
   -- there may be a trade-off between deciding to throw an Error if a DbComment
   -- cannot be converted to a Comment, or simply ignoring any DbComment that is
   -- not valid.
-  in
-    error "getComments not implemented"
+  in do
+    queryResult <- Sql.runDBAction $ Sql.query (dbConn fadb) sql [getTopic topic]
+    convertedErrors <- pure $ first parseSqlErrors queryResult
+    pure $ (traverse fromDbComment) =<< convertedErrors
+
+
 
 addCommentToTopic
   :: FirstAppDB
   -> Topic
   -> CommentText
   -> IO (Either Error ())
-addCommentToTopic =
+addCommentToTopic fadb topic comment =
   let
     sql = "INSERT INTO comments (topic,comment,time) VALUES (?,?,?)"
-  in
-    error "addCommentToTopic not implemented"
+    con = dbConn fadb
+  in do
+    time <- getCurrentTime
+    queryResult <- Sql.runDBAction $
+      Sql.execute con sql (getTopic topic, getCommentText comment, time)
+    pure $ first parseSqlErrors queryResult
+
+instance Sql.FromRow Text  where
+  fromRow = Text.pack <$> Sql.field
 
 getTopics
   :: FirstAppDB
   -> IO (Either Error [Topic])
-getTopics =
+getTopics fadb =
   let
     sql = "SELECT DISTINCT topic FROM comments"
-  in
-    error "getTopics not implemented"
+    con = dbConn fadb
+    query = Sql.query_ con sql :: IO [Text.Text]
+  in do
+    queryResult <- Sql.runDBAction $ query
+    --pure $ bimap parseSqlErrors (_ (traverse mkTopic)) queryResult
+    convertedErrors <- pure $ first parseSqlErrors queryResult
+    pure $ (traverse mkTopic) =<< convertedErrors
 
 deleteTopic
   :: FirstAppDB
   -> Topic
   -> IO (Either Error ())
-deleteTopic =
+deleteTopic fadb topic =
   let
     sql = "DELETE FROM comments WHERE topic = ?"
-  in
-    error "deleteTopic not implemented"
+    con = dbConn fadb
+    query = Sql.execute con sql [getTopic topic]
+  in do
+    qResult <- Sql.runDBAction query
+    pure $ first parseSqlErrors qResult

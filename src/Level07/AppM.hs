@@ -46,54 +46,71 @@ runAppM
   :: AppM a
   -> Env
   -> IO (Either Error a)
-runAppM =
-  error "runAppM not implemented"
+runAppM (AppM f) env = f env
 
 instance Applicative AppM where
   pure :: a -> AppM a
-  pure = error "pure for AppM not implemented"
+  pure a = AppM $  \_ -> pure $ pure a
 
   (<*>) :: AppM (a -> b) -> AppM a -> AppM b
-  (<*>) = error "spaceship for AppM not implemented"
+  AppM f <*> AppM g = AppM $ \s -> do
+    envf <- f s
+    envg <- g s
+    pure $ envf <*> envg
 
 instance Monad AppM where
   return :: a -> AppM a
-  return = error "return for AppM not implemented"
+  return = pure
 
   -- When it comes to running functions in AppM as a Monad, this will take care
   -- of passing the Env from one function to the next.
   (>>=) :: AppM a -> (a -> AppM b) -> AppM b
-  (>>=) = error "bind for AppM not implemented"
+  AppM f >>= g = AppM $ \s -> do
+    resA <-  f s
+    resEA <-pure $ (runAppM . g) <$> resA
+    case resEA of
+      Left e -> pure $ Left e
+      Right h -> h s
 
 instance MonadError Error AppM where
   throwError :: Error -> AppM a
-  throwError = error "throwError for AppM not implemented"
+  throwError  = AppM . const . pure . Left
 
   catchError :: AppM a -> (Error -> AppM a) -> AppM a
-  catchError = error "catchError for AppM not implemented"
+  catchError (AppM f) g = AppM $ \env -> do
+    current <- f env
+    case current of
+             Left e -> runAppM (g e) env
+             Right a -> runAppM (pure a) env
+
 
 instance MonadReader Env AppM where
   -- Return the current Env from the AppM.
   ask :: AppM Env
-  ask = error "ask for AppM not implemented"
+  ask = AppM $ \env -> pure (Right env)
 
   -- Run a AppM inside of the current one using a modified Env value.
   local :: (Env -> Env) -> AppM a -> AppM a
-  local = error "local for AppM not implemented"
+  local f (AppM g) = AppM (g . f )
 
   -- This will run a function on the current Env and return the result.
   reader :: (Env -> a) -> AppM a
-  reader = error "reader for AppM not implemented"
+  reader f = AppM $ \env -> let
+                      a = f env
+                      in
+                        pure $ Right a
 
 instance MonadIO AppM where
   -- Take a type of 'IO a' and lift it into our AppM.
   liftIO :: IO a -> AppM a
-  liftIO = error "liftIO for AppM not implemented"
+  liftIO action = AppM $  \_ -> do
+    a <- action
+    pure $ Right a
 
 -- Move on to ``src/Level07/DB.hs`` after this
 
 liftEither
   :: Either Error a
   -> AppM a
-liftEither =
-  error "throwLeft not implemented"
+liftEither (Left e) = throwError e
+liftEither (Right a) = pure a

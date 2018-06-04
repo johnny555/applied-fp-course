@@ -20,7 +20,10 @@ import           Network.HTTP.Types                 (Status, hContentType,
 
 import qualified Data.ByteString.Lazy               as LBS
 
+import           Control.Monad                      (join)
+
 import           Data.Either                        (either)
+import           Data.Bifunctor                     (first)
 import           Data.Monoid                        ((<>))
 
 import           Data.Text                          (Text)
@@ -34,7 +37,7 @@ import qualified Data.Aeson                         as A
 import           Level06.AppM                       (AppM, liftEither, runAppM)
 import qualified Level06.Conf                       as Conf
 import qualified Level06.DB                         as DB
-import           Level06.Types                      (Conf, ContentType (..),
+import           Level06.Types                      (Conf (..), ConfigError (..), ContentType (..),
                                                      Error (..),
                                                      RqType (AddRq, ListRq, ViewRq),
                                                      mkCommentText, mkTopic,
@@ -44,17 +47,18 @@ import           Level06.Types                      (Conf, ContentType (..),
 -- interesting ways. But we also want to be able to capture these errors in a
 -- single type so that we can deal with the entire start-up process as a whole.
 data StartUpError
-  = DbInitErr SQLiteResponse
+  = DbInitErr SQLiteResponse | StartupConfigError ConfigError
   deriving Show
 
 runApp :: IO ()
 runApp = do
   -- Load our configuration
+
   cfgE <- prepareAppReqs
   -- Loading the configuration can fail, so we have to take that into account now.
   case cfgE of
-    Left err   -> undefined
-    Right _cfg -> run undefined undefined
+    Left err   -> print err
+    Right (cfg, db) -> run 3000 $ app cfg db
 
 -- We need to complete the following steps to prepare our app requirements:
 --
@@ -67,7 +71,23 @@ runApp = do
 prepareAppReqs
   :: IO ( Either StartUpError ( Conf, DB.FirstAppDB ) )
 prepareAppReqs =
-  error "copy your prepareAppReqs from the previous level."
+  let
+    --filePath = Conf.dbFilePath Conf.firstAppConfig
+    configFile = "files/appconfig.json"
+
+  in do
+    conf <- Conf.parseOptions configFile--first (StartupConfigError) $  parseOptions configFile
+    confError <- pure $ first (StartupConfigError) conf
+    -- first (DbInitErr) <$>
+    db <- pure $  (\ a -> DB.initDB (getConfFilePath a)) <$> (confError)
+
+    dbPure <- either (pure . Left) (\g -> first (DbInitErr) <$> g) db
+
+    pure $  (,) <$> confError<*> dbPure
+
+    --db <-  (DB.initDB . getConfFilePath)
+    --dbFinal <- pure $ first (DbInitErr) dbAlmost
+
 
 -- | Some helper functions to make our lives a little more DRY.
 mkResponse

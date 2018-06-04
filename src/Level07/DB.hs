@@ -10,7 +10,7 @@ module Level07.DB
   ) where
 
 import           Control.Monad.IO.Class             (liftIO)
-import           Control.Monad.Reader               (asks)
+import           Control.Monad.Reader               (asks, ask)
 
 import           Data.Bifunctor                     (first)
 import           Data.Text                          (Text)
@@ -25,7 +25,7 @@ import qualified Database.SQLite.Simple             as Sql
 import qualified Database.SQLite.SimpleErrors       as Sql
 import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
-import           Level07.AppM                      (AppM, Env (envDB))
+import           Level07.AppM                      (AppM, Env (envDB), liftEither)
 
 import           Level07.Types                     (Comment, CommentText,
                                                      DBFilePath (getDBFilePath),
@@ -62,36 +62,71 @@ initDB fp = Sql.runDBAction $ do
 
 getDBConn
   :: AppM Connection
-getDBConn =
-  error "getDBConn not implemented"
+getDBConn = do
+  --env <-  ask
+  --res <- pure $  dbConn . envDB  $ env
+  --pure res
+  asks (dbConn . envDB)
 
 runDB
   :: (a -> Either Error b)
   -> (Connection -> IO a)
   -> AppM b
-runDB =
-  error "runDB not re-implemented"
+runDB f g = do
+  con <- getDBConn
+  a <-liftIO $ g con
+  liftEither $ f a
+
 
 getComments
   :: Topic
   -> AppM [Comment]
-getComments =
-  error "Copy your completed 'getComments' and refactor to match the new type signature"
+getComments topic = do
+  let q = "SELECT id,topic,comment,time FROM comments WHERE topic = ?"
+  runDB (traverse fromDbComment)
+    $ \c -> Sql.query c q [getTopic topic]
+--  getComments db t = do
+  -- Write the query with an icky string and remember your placeholders!
+
+  -- To be doubly and triply sure we've no garbage in our response, we take care
+  -- to convert our DB storage type into something we're going to share with the
+  -- outside world. Checking again for things like empty Topic or CommentText values.
+  --runDB (traverse fromDbComment) $ Sql.query (dbConn db) q (Sql.Only . getTopic $ t)
+
+--  error "Copy your completed 'getComments' and refactor to match the new type signature"
 
 addCommentToTopic
   :: Topic
   -> CommentText
   -> AppM ()
-addCommentToTopic =
-  error "Copy your completed 'appCommentToTopic' and refactor to match the new type signature"
+addCommentToTopic topic text = do
+  -- Record the time this comment was created.
+  nowish <- liftIO getCurrentTime
+  -- Note the triple, matching the number of values we're trying to insert, plus
+  -- one for the table name.
+  let q =
+        -- Remember that the '?' are order dependent so if you get your input
+        -- parameters in the wrong order, the types won't save you here. More on that
+        -- sort of goodness later.
+        "INSERT INTO comments (topic,comment,time) VALUES (?,?,?)"
+  -- We use the execute function this time as we don't care about anything
+  -- that is returned. The execute function will still return the number of rows
+  -- affected by the query, which in our case should always be 1.
+  runDB (const (Right ())) $ \con ->  Sql.execute con q (getTopic topic, getCommentText text, nowish)
+  -- An alternative is to write a returning query to get the Id of the DbComment
+  -- we've created. We're being lazy (hah!) for now, so assume awesome and move on.
 
 getTopics
   :: AppM [Topic]
 getTopics =
-  error "Copy your completed 'getTopics' and refactor to match the new type signature"
+  let q = "SELECT DISTINCT topic FROM comments"
+  in
+    runDB (traverse ( mkTopic . Sql.fromOnly )) $ \con -> Sql.query_ con q
 
 deleteTopic
   :: Topic
   -> AppM ()
-deleteTopic =
-  error "Copy your completed 'deleteTopic' and refactor to match the new type signature"
+deleteTopic topic =
+  let q = "DELETE FROM comments WHERE topic = ?"
+  in
+    runDB (const (Right ())) $ \con ->  Sql.execute con q (Sql.Only . getTopic $ topic)

@@ -10,6 +10,7 @@ import           Control.Monad                      (join)
 
 import           Control.Monad.IO.Class             (liftIO)
 import           Control.Monad.Reader               (asks)
+import           Control.Monad.Except               (MonadError (..))
 
 import           Network.Wai                        (Application, Request,
                                                      Response, pathInfo,
@@ -44,11 +45,13 @@ import           Level07.Types                      (Conf (dbFilePath),
                                                      confPortToWai,
                                                      mkCommentText, mkTopic)
 
-import           Level07.AppM                       (AppM, Env (Env, envConfig, envDB, envLoggingFn),
-                                                     liftEither)
+--import           Level07.AppM                       (AppM, Env (Env, envConfig, envDB, envLoggingFn),
+--                                                     liftEither, runAppM)
+import             Level07.AppM
 
 -- We're going to use the `mtl` ExceptT monad transformer to make the loading of our `Conf` a bit more straight-forward.
-import           Control.Monad.Except               (ExceptT (..), runExceptT)
+import           Control.Monad.Except               (ExceptT (..), runExceptT,
+                                                     withExceptT, mapExceptT)
 
 -- Our start-up is becoming more complicated and could fail in new and
 -- interesting ways. But we also want to be able to capture these errors in a
@@ -69,6 +72,10 @@ runApp = do
     appWithDb env =
       run ( confPortToWai $ envConfig env ) (app env)
 
+logToConsole :: Text -> AppM ()
+logToConsole text = do
+  liftIO $ print text
+
 -- Reimplement the `prepareAppReqs` function using the imported `ExceptT`
 -- constructor to help eliminate the manual plumbing of the error values.
 --
@@ -76,18 +83,40 @@ runApp = do
 -- demonstrate how easily it can be applied simplify error handling.
 prepareAppReqs
   :: IO (Either StartUpError Env)
-prepareAppReqs = runExceptT $
-  error "Copy your completed 'prepareAppReqs' from the previous level and refactor it here"
+prepareAppReqs = runExceptT $ do
+  --let configFile = "files/appconfig.json"
+  conf <- withExceptT (ConfErr) $ ExceptT $ Conf.parseOptions "files/appconfig.json"
+  db <- withExceptT (DbInitErr) $ (ExceptT .  DB.initDB . dbFilePath) conf
+  pure $ Env logToConsole conf db
 
 -- Now that our request handling and response creating functions operate
 -- within our AppM context, we need to run the AppM to get our IO action out
 -- to be run and handed off to the callback function. We've already written
 -- the function for this so include the 'runAppM' with the Env.
+
 app
   :: Env
   -> Application
-app =
-  error "Copy your completed 'app' from the previous level and refactor it here"
+app env rq cb = (runAppM resp env)  >>= cb . mkTmpErrorResponse
+  where
+    rqType = mkRequest rq
+    respError = handleRequest =<< rqType
+    resp = catchError (respError) mkErrorResponse
+
+    mkTmpErrorResponse er = either mkRawErrorResponse id er
+
+{-
+app
+  :: Env
+  -> Application
+app env rq cb = (runAppM resp env)  >>= cb . mkTmpErrorResponse
+  where
+    resp = do
+      rqType <- mkRequest rq
+      catchError (handleRequest rqType) mkErrorResponse
+
+    mkTmpErrorResponse er = either mkRawErrorResponse id er
+-}
 
 handleRequest
   :: RqType
@@ -130,15 +159,18 @@ mkListRequest
 mkListRequest =
   Right ListRq
 
+mkRawErrorResponse :: Error -> Response
+mkRawErrorResponse _ = Res.resp404 PlainText "Uncaught Error"
+
 mkErrorResponse
   :: Error
   -> AppM Response
 mkErrorResponse UnknownRoute     = pure $ Res.resp404 PlainText "Unknown Route"
 mkErrorResponse EmptyCommentText = pure $ Res.resp400 PlainText "Empty Comment"
 mkErrorResponse EmptyTopic       = pure $ Res.resp400 PlainText "Empty Topic"
-mkErrorResponse ( DBError _ )    = do
+mkErrorResponse ( DBError err )    = do
   -- As with our request for the FirstAppDB, we use the asks function from
   -- Control.Monad.Reader and pass the field accessors from the Env record.
-  error "mkErrorResponse needs to 'log' our DB Errors to the console"
+  liftIO $ print err
   -- Be a sensible developer and don't leak your DB errors over the internet.
   pure (Res.resp500 PlainText "OH NOES")

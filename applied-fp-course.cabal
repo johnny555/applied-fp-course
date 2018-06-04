@@ -107,23 +107,26 @@ library
                        -fno-warn-unused-do-bind
                        -fno-warn-unused-imports
                        -fno-warn-type-defaults
+                       -fno-max-relevant-binds
                        -ferror-spans
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , wai == 3.2.*
-                     , warp == 3.2.*
-                     , http-types >= 0.9 && < 0.13
+  build-depends:       aeson == 1.*
+                     , base >=4.8 && <4.12
                      , bytestring == 0.10.*
-                     , text == 1.2.*
-                     , optparse-applicative >= 0.13 && < 0.15
-                     , aeson == 1.*
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
+                     , http-types >= 0.9 && < 0.13
                      , mtl == 2.2.*
-                     , time >= 1.4 && < 1.10
+                     , optparse-applicative >= 0.13 && < 0.15
+                     , semigroups == 0.18.*
                      , sqlite-simple == 0.4.*
                      , sqlite-simple-errors == 0.6.*
-                     , semigroups == 0.18.*
+                     , text == 1.2.*
+                     , time >= 1.4 && < 1.10
                      , transformers >= 0.4 && < 0.6
+                     , wai == 3.2.*
+                     , warp == 3.2.*
 
   -- Directories containing source files.
   hs-source-dirs:      src
@@ -144,15 +147,17 @@ test-suite app-fp-tests
                      , Level06Tests
                      , Level07Tests
 
-  build-depends:       base >= 4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >= 4.8 && <4.12
+                     , bytestring == 0.10.*
+                     , hspec >= 2.2 && < 3.0
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.6 && < 0.10
+                     , hspec-wai >= 0.9.0
+                     , mtl == 2.2.*
+                     , text == 1.2.*
                      , wai == 3.2.*
                      , wai-extra == 3.0.*
-                     , hspec >= 2.2 && < 3.0
-                     , hspec-wai >= 0.6 && < 0.10
-                     , bytestring == 0.10.*
-                     , text == 1.2.*
-                     , mtl == 2.2.*
 
 test-suite doctests
   -- Base language which the package is written in.
@@ -167,12 +172,14 @@ test-suite doctests
   ghc-options:         -threaded
   main-is:             doctests.hs
   hs-source-dirs:      tests
-  build-depends:       base >= 4.8 && <4.12
-                     , applied-fp-course
-                     , mtl == 2.2.*
-                     , hspec >= 2.2 && < 3.0
-                     , hspec-wai >= 0.6 && < 0.10
+  build-depends:       applied-fp-course
+                     , base >= 4.8 && <4.12
                      , doctest >= 0.11 && < 0.16
+                     , hspec >= 2.2 && < 3.0
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.6 && < 0.10
+                     , hspec-wai >= 0.9.0
+                     , mtl == 2.2.*
 
 -- Level Executables
 executable level01-exe
@@ -181,8 +188,10 @@ executable level01-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
@@ -192,8 +201,10 @@ executable level02-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
@@ -203,8 +214,10 @@ executable level03-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
@@ -214,8 +227,10 @@ executable level04-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
@@ -225,8 +240,10 @@ executable level05-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
@@ -236,8 +253,10 @@ executable level06-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
@@ -247,7 +266,9 @@ executable level07-exe
   -- Directories containing source files.
   hs-source-dirs:      exe
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.12
-                     , applied-fp-course
+  build-depends:       applied-fp-course
+                     , base >=4.8 && <4.12
+                     , hspec >= 2.5.1
+                     , hspec-wai >= 0.9.0
   -- Base language which the package is written in.
   default-language:    Haskell2010

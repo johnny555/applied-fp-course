@@ -20,6 +20,7 @@ import           Network.HTTP.Types                 (Status, hContentType,
 
 import qualified Data.ByteString.Lazy               as LBS
 
+import           Data.Bifunctor                     (first)
 import           Data.Either                        (either)
 import           Data.Monoid                        ((<>))
 
@@ -53,8 +54,8 @@ runApp = do
   cfgE <- prepareAppReqs
   -- Loading the configuration can fail, so we have to take that into account now.
   case cfgE of
-    Left err   -> undefined
-    Right _cfg -> run undefined undefined
+    Left err   -> print err
+    Right cfg -> run 3000 (app cfg)
 
 -- We need to complete the following steps to prepare our app requirements:
 --
@@ -66,7 +67,10 @@ runApp = do
 prepareAppReqs
   :: IO ( Either StartUpError DB.FirstAppDB )
 prepareAppReqs =
-  error "copy your prepareAppReqs from the previous level."
+  let
+    filePath = Conf.dbFilePath Conf.firstAppConfig
+  in
+    first (DbInitErr) <$> DB.initDB filePath
 
 -- | Some helper functions to make our lives a little more DRY.
 mkResponse
@@ -113,13 +117,33 @@ resp200Json =
   resp200 JSON . A.encode
 -- |
 
+
 -- How has this implementation changed, now that we have an AppM to handle the
 -- errors for our application? Could it be simplified? Can it be changed at all?
 app
   :: DB.FirstAppDB
   -> Application
-app db rq cb =
-  error "app not reimplemented"
+app db rq cb = do
+  let
+    lastCheck = either mkErrorResponse id
+
+  a <- runAppM $ do
+             rq' <- mkRequest rq
+             handleRequest db rq'
+  resp <- pure $ lastCheck a
+  cb resp
+    {-
+     <- handleRespErr <$> handleRErr rq'
+    cb res    where
+        handleRespErr :: Either Error Response -> Response
+        handleRespErr = either mkErrorResponse id
+
+        -- We want to pass the Database through to the handleRequest so it's
+        -- aable to all of our handlers.
+        handleRErr :: Either Error RqType -> IO (Either Error Response)
+        handleRErr = either ( pure . Left ) ( handleRequest db )
+-}
+
 
 handleRequest
   :: DB.FirstAppDB

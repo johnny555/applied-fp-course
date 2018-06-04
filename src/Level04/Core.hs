@@ -30,12 +30,13 @@ import           Data.Text.Encoding                 (decodeUtf8)
 import           Data.Aeson                         (ToJSON)
 import qualified Data.Aeson                         as A
 
+import           Data.Bifunctor
 import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
-import           Level04.Conf                       (Conf, firstAppConfig)
+import           Level04.Conf                       (Conf (..), firstAppConfig)
 import qualified Level04.DB                         as DB
 import           Level04.Types                      (ContentType (JSON, PlainText),
-                                                     Error (EmptyCommentText, EmptyTopic, UnknownRoute),
+                                                     Error (..),
                                                      RqType (AddRq, ListRq, ViewRq),
                                                      mkCommentText, mkTopic,
                                                      renderContentType)
@@ -48,7 +49,15 @@ data StartUpError
   deriving Show
 
 runApp :: IO ()
-runApp = error "runApp needs re-implementing"
+runApp = do
+  let
+    runF = run 3000
+
+  appReqs <- prepareAppReqs
+  a <- pure $ app <$> appReqs
+  --b <- runF <$> a
+  pure $ bimap (show) (runF) a
+  pure ()
 
 -- We need to complete the following steps to prepare our app requirements:
 --
@@ -60,7 +69,10 @@ runApp = error "runApp needs re-implementing"
 prepareAppReqs
   :: IO ( Either StartUpError DB.FirstAppDB )
 prepareAppReqs =
-  error "prepareAppReqs not implemented"
+  let
+    filePath = dbFilePath firstAppConfig
+  in
+    first (DbInitErr) <$> DB.initDB filePath
 
 -- | Some helper functions to make our lives a little more DRY.
 mkResponse
@@ -128,12 +140,11 @@ handleRequest
   :: DB.FirstAppDB
   -> RqType
   -> IO (Either Error Response)
-handleRequest _db (AddRq _ _) =
-  (resp200 PlainText "Success" <$) <$> error "AddRq handler not implemented"
-handleRequest _db (ViewRq _)  =
-  error "ViewRq handler not implemented"
-handleRequest _db ListRq      =
-  error "ListRq handler not implemented"
+handleRequest db (AddRq t c) =
+  (resp200 PlainText "Success" <$) <$> DB.addCommentToTopic db t c
+handleRequest db (ViewRq t)  = ((<$>) resp200Json) <$> DB.getComments db t
+handleRequest db ListRq      = ((<$>) resp200Json) <$> DB.getTopics db
+
 
 mkRequest
   :: Request
@@ -177,3 +188,7 @@ mkErrorResponse EmptyCommentText =
   resp400 PlainText "Empty Comment"
 mkErrorResponse EmptyTopic =
   resp400 PlainText "Empty Topic"
+mkErrorResponse SqlDbError =
+  resp400 PlainText "Sql Db Error"
+mkErrorResponse ParseSqlResponseError =
+  resp400 PlainText "Error parsing database content"
